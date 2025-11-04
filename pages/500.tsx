@@ -28,7 +28,7 @@ export default function Custom500() {
         </div>
 
         <p className="text-lg text-gray-600 mb-8">
-          We're sorry, but we encountered an internal server error. Our team has been notified and
+          We&apos;re sorry, but we encountered an internal server error. Our team has been notified and
           is working to fix the issue.
         </p>
 

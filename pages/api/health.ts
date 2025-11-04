@@ -48,7 +48,7 @@ export default async function handler(
   }
 
   // Return appropriate status code
-  const statusCode = overallStatus === 'healthy' ? 200 : overallStatus === 'degraded' ? 200 : 503
+  const statusCode = overallStatus === 'healthy' ? 200 : 503
 
   return res.status(statusCode).json(response)
 }
