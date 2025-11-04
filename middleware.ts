@@ -1,8 +1,63 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { rateLimit, getClientIdentifier, RateLimitPresets } from './lib/rateLimit'
 
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
+
+  // Apply rate limiting to API routes
+  if (pathname.startsWith('/api/')) {
+    const identifier = getClientIdentifier(req)
+
+    // Use strict limits for sensitive endpoints
+    const sensitiveEndpoints = ['/api/webhooks', '/api/create-checkout-session']
+    const isSensitive = sensitiveEndpoints.some((endpoint) =>
+      pathname.startsWith(endpoint)
+    )
+
+    // Health check gets lenient limits
+    const isHealthCheck = pathname === '/api/health'
+
+    const config = isHealthCheck
+      ? RateLimitPresets.lenient
+      : isSensitive
+      ? RateLimitPresets.strict
+      : RateLimitPresets.standard
+
+    const result = rateLimit({
+      identifier,
+      ...config,
+    })
+
+    // Create response with rate limit headers
+    let res = NextResponse.next({
+      request: {
+        headers: req.headers,
+      },
+    })
+
+    res.headers.set('X-RateLimit-Limit', result.limit.toString())
+    res.headers.set('X-RateLimit-Remaining', result.remaining.toString())
+    res.headers.set('X-RateLimit-Reset', new Date(result.reset).toISOString())
+
+    if (!result.success) {
+      const retryAfter = Math.ceil((result.reset - Date.now()) / 1000)
+      res.headers.set('Retry-After', retryAfter.toString())
+
+      return NextResponse.json(
+        {
+          error: 'Too many requests',
+          message: 'Rate limit exceeded. Please try again later.',
+          retryAfter,
+        },
+        { status: 429, headers: res.headers }
+      )
+    }
+
+    return res
+  }
+
   let res = NextResponse.next({
     request: {
       headers: req.headers,
@@ -42,8 +97,6 @@ export async function middleware(req: NextRequest) {
   const {
     data: { session },
   } = await supabase.auth.getSession()
-
-  const { pathname } = req.nextUrl
 
   // Protected routes
   const protectedRoutes = ['/app', '/admin', '/employer']
